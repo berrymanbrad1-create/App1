@@ -1,0 +1,46 @@
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+app.use(express.static("public"));
+
+const users = {};
+
+io.on("connection", (socket) => {
+
+  socket.on("join", (name) => {
+    users[socket.id] = name;
+    io.emit("users", Object.values(users));
+    io.emit("system", `${name} joined`);
+  });
+
+  socket.on("private_message", ({ to, message }) => {
+    const from = users[socket.id];
+
+    const targetId = Object.keys(users).find(
+      id => users[id] === to
+    );
+
+    const payload = {
+      from,
+      to,
+      message,
+      time: new Date().toLocaleTimeString()
+    };
+
+    if (targetId) io.to(targetId).emit("private_message", payload);
+    socket.emit("private_message", payload);
+  });
+
+  socket.on("disconnect", () => {
+    delete users[socket.id];
+    io.emit("users", Object.values(users));
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log("Running on", PORT));
